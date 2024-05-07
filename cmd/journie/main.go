@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	firebaseClient "journie/pkg/firebase"
+	"journie/pkg/messaging"
+	"journie/pkg/pubsub"
 	"log"
 	"strings"
 
@@ -20,18 +23,16 @@ import (
 	"google.golang.org/api/option"
 	tele "gopkg.in/telebot.v3"
 
-	firebase "firebase.google.com/go"
 	"github.com/mitchellh/mapstructure"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
 )
 
 var genAi *GenAi = nil
-var firestoreClient *firestore.Client
 
 type ChatSession struct {
-	sessions map[int]*genai.ChatSession // Map of user IDs to Gemini clients
-	mu       sync.Mutex                 // Mutex to synchronize access to the map
+	sessions map[string]*genai.ChatSession // Map of user IDs to Gemini clients
+	mu       sync.Mutex                    // Mutex to synchronize access to the map
 }
 
 type GenAi struct {
@@ -43,14 +44,6 @@ type AnalysisResult struct {
 	Summary   string    `json:"summary"`
 	Mood      []string  `json:"mood"`
 	CreatedAt time.Time `json:"createdAt"`
-}
-
-const (
-	Telegram string = "telegram"
-)
-
-func GetPlatformUserId(userId string) string {
-	return fmt.Sprintf("%s-%s", Telegram, userId)
 }
 
 func MapToAnalysisResult(data map[string]interface{}) (*AnalysisResult, error) {
@@ -69,7 +62,7 @@ func AnalysisResultToHistory(data *AnalysisResult) string {
 
 func ChatSessionManager() *ChatSession {
 	return &ChatSession{
-		sessions: make(map[int]*genai.ChatSession),
+		sessions: make(map[string]*genai.ChatSession),
 	}
 }
 
@@ -91,7 +84,7 @@ func GenAiManager() *GenAi {
 	}
 }
 
-func (cs *ChatSession) GetChatSession(userID int) (*genai.ChatSession, error) {
+func (cs *ChatSession) GetChatSession(userID string) (*genai.ChatSession, error) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
@@ -141,12 +134,12 @@ func (cs *ChatSession) GetChatSession(userID int) (*genai.ChatSession, error) {
 
 	fmt.Println("new chat session created")
 
-	// get past x days of summaries for user from firestore, insert into history
 	ctx := context.Background()
-	platformUserId := GetPlatformUserId(fmt.Sprint(userID))
-	// collectionPath := fmt.Sprintf("users/%s/entries", platformUserId) // Subcollection name
 
-	userRef := firestoreClient.Collection("users").Doc(platformUserId)
+	firebaseClient.UpdateUserLastCreatedSession(ctx, userID)
+
+	// get past x days of summaries for user from firestore, insert into history
+	userRef := firebaseClient.FirestoreClient.Collection("users").Doc(userID)
 
 	subcollectionRef := userRef.Collection("entries")
 
@@ -163,9 +156,7 @@ func (cs *ChatSession) GetChatSession(userID int) (*genai.ChatSession, error) {
 		if doc == nil {
 			break
 		}
-		// if err != nil {
-		// 	return err
-		// }
+
 		fmt.Println(doc.Data())
 
 		result, err := MapToAnalysisResult(doc.Data())
@@ -251,9 +242,7 @@ func ingestChatSession(chatSession *genai.ChatSession, platformUserId string) (*
 		return nil, errors.New("failed to convert to text") // or handle the error differently
 	}
 
-	fmt.Println("text:", text)
-
-	cleanJSON := strings.TrimSpace(strings.TrimPrefix(strings.TrimSuffix(string(text), "```"), "```json "))
+	cleanJSON := strings.TrimSpace(strings.TrimPrefix(strings.TrimSuffix(string(text), "``` \n"), "```json\n"))
 
 	var result AnalysisResult
 	if err := json.Unmarshal([]byte(cleanJSON), &result); err != nil {
@@ -272,10 +261,9 @@ func ingestChatSession(chatSession *genai.ChatSession, platformUserId string) (*
 
 	fmt.Println("collectionPath:", collectionPath)
 
-	_, err = firestoreClient.Collection(collectionPath).Doc(now.Format("2006-01-02")).Set(ctx, map[string]interface{}{
-		"summary": &result.Summary,
-		"mood":    &result.Mood,
-		// "date":      now.Format("2006-01-02"),
+	_, err = firebaseClient.FirestoreClient.Collection(collectionPath).Doc(now.Format("2006-01-02")).Set(ctx, map[string]interface{}{
+		"summary":   &result.Summary,
+		"mood":      &result.Mood,
 		"createdAt": &result.CreatedAt,
 	})
 
@@ -286,7 +274,7 @@ func ingestChatSession(chatSession *genai.ChatSession, platformUserId string) (*
 	return &result, nil
 }
 
-func (cs *ChatSession) deleteChatSession(userID int) error {
+func (cs *ChatSession) deleteChatSession(userID string) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
@@ -314,9 +302,12 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
-	pref := tele.Settings{
-		Token:  os.Getenv("TELEGRAM_TOKEN"),
-		Poller: &tele.LongPoller{Timeout: 10 * time.Second},
+	// init google pubsub
+	pubsuberr := pubsub.SubscribeToTopic(context.Background(), os.Getenv("FIREBASE_PROJECT_ID"), "remind-topic", "remind-sub")
+
+	if pubsuberr != nil {
+		fmt.Println("error with pubsub")
+		log.Fatal(err)
 	}
 
 	// init gemini
@@ -326,46 +317,41 @@ func main() {
 
 	fmt.Println("gemini client created")
 
-	b, err := tele.NewBot(pref)
+	// init telebot
+	teleErr := messaging.Init()
 
-	if err != nil {
-		log.Fatal(err)
+	if teleErr != nil {
+		log.Fatalln(teleErr)
 		return
 	}
 
-	conf := &firebase.Config{ProjectID: os.Getenv("FIREBASE_PROJECT_ID")}
-	opt := option.WithCredentialsFile(os.Getenv("FIREBASE_CREDENTIAL_PATH"))
+	// init firebase and firestore
+	firebaseErr := firebaseClient.Init(ctx)
 
-	app, err := firebase.NewApp(ctx, conf, opt)
-	if err != nil {
-		log.Fatalln(err)
+	if firebaseErr != nil {
+		log.Fatalln(firebaseErr)
 	}
 
-	firestoreClient, err = app.Firestore(ctx)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	b.Handle("/hello", func(c tele.Context) error {
+	messaging.TeleBot.Handle("/hello", func(c tele.Context) error {
 		var (
 			username = c.Sender().Username
 		)
 		return c.Send("Hello" + " " + username + "!")
 	})
 
-	b.Handle("/ingest_session", func(c tele.Context) error {
+	messaging.TeleBot.Handle("/ingest_session", func(c tele.Context) error {
 		var (
 			userId = int(c.Sender().ID)
 		)
 
-		cs, err := csManager.GetChatSession(userId)
+		cs, err := csManager.GetChatSession(messaging.GetPlatformUserId(fmt.Sprint(userId)))
 
 		if err != nil {
 			log.Print(err)
 			return c.Send("Error retrieving chat session")
 		}
 
-		var platformUserId = GetPlatformUserId(fmt.Sprint(userId))
+		var platformUserId = messaging.GetPlatformUserId(fmt.Sprint(userId))
 
 		analysis, err := ingestChatSession(cs, platformUserId)
 
@@ -385,12 +371,12 @@ func main() {
 		return c.Send(string(out))
 	})
 
-	b.Handle("/delete_session", func(c tele.Context) error {
+	messaging.TeleBot.Handle("/delete_session", func(c tele.Context) error {
 		var (
 			userId = int(c.Sender().ID)
 		)
 
-		err := csManager.deleteChatSession(userId)
+		err := csManager.deleteChatSession(messaging.GetPlatformUserId(fmt.Sprint(userId)))
 
 		if err != nil {
 			return c.Send("Error deleting chat session")
@@ -399,7 +385,7 @@ func main() {
 		return c.Send("Chat session deleted")
 	})
 
-	b.Handle(tele.OnText, func(c tele.Context) error {
+	messaging.TeleBot.Handle(tele.OnText, func(c tele.Context) error {
 		// All the text messages that weren't
 		// captured by existing handlers.
 
@@ -415,14 +401,14 @@ func main() {
 
 		// Initialize chat session
 		// @todo close chat session if user is inactive
-		cs, err := csManager.GetChatSession(userId)
+		cs, err := csManager.GetChatSession(messaging.GetPlatformUserId(fmt.Sprint(userId)))
 
 		if err != nil {
 			log.Fatal(err)
 			return c.Send("Error creating chat session")
 		}
 
-		b.Notify(sender, tele.Typing)
+		messaging.TeleBot.Notify(sender, tele.Typing)
 
 		resp, err := cs.SendMessage(ctx, genai.Text(text))
 
@@ -442,18 +428,18 @@ func main() {
 		return c.Send(string(out))
 	})
 
-	b.Handle(tele.OnPhoto, func(c tele.Context) error {
+	messaging.TeleBot.Handle(tele.OnPhoto, func(c tele.Context) error {
 		return c.Send(string("Sorry! I am unable to process images as of now!"))
 	})
 
-	b.Handle(tele.OnVideo, func(c tele.Context) error {
+	messaging.TeleBot.Handle(tele.OnVideo, func(c tele.Context) error {
 		return c.Send(string("Sorry! I am unable to process videos as of now!"))
 	})
 
-	b.Handle(tele.OnVoice, func(c tele.Context) error {
+	messaging.TeleBot.Handle(tele.OnVoice, func(c tele.Context) error {
 		return c.Send(string("Sorry! I am unable to process voice messages as of now!"))
 	})
 
-	b.Start()
+	messaging.TeleBot.Start()
 
 }
