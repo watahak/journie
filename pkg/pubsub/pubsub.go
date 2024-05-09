@@ -27,17 +27,16 @@ func SubscribeToTopic(ctx context.Context, projectID, topicName string, subscrip
 		// Receive messages concurrently
 		err = sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
 			fmt.Println("Received message:", string(msg.Data))
-			// Process the message data and acknowledge it
 
 			// hourly handler
-
 			var now = time.Now()
 
-			// if now.UTC().Hour() == 14 { // sg 10pm
-			go messaging.RemindDaily()
+			if now.UTC().Hour() == 14 { // sg 10pm
+				go messaging.RemindDaily()
+			}
 
 			if now.UTC().Hour() == 16 { // sg 12am
-				messaging.SummarizeDaily()
+				go messaging.SummarizeDaily()
 			}
 
 			msg.Ack()
