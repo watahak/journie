@@ -2,6 +2,7 @@ package generative
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -36,4 +37,14 @@ func Init() error {
 	fmt.Println("gemini client created")
 
 	return nil
+}
+
+func ResponseToString(resp *genai.GenerateContentResponse) (string, error) {
+	part := resp.Candidates[0].Content.Parts[0]
+
+	text, ok := part.(genai.Text)
+	if !ok {
+		return "", errors.New("unexpected part type")
+	}
+	return string(text), nil
 }

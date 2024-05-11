@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"journie/pkg/messaging"
-	"time"
 
 	"cloud.google.com/go/pubsub"
 )
@@ -26,16 +25,18 @@ func SubscribeToTopic(ctx context.Context, projectID, topicName string, subscrip
 	go func() {
 		// Receive messages concurrently
 		err = sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
-			fmt.Println("Received message:", string(msg.Data))
+			fmt.Println("Received message at:", msg.PublishTime)
 
 			// hourly handler
-			var now = time.Now()
+			var now = msg.PublishTime
+
+			// go messaging.TestLoop()
 
 			if now.UTC().Hour() == 14 { // sg 10pm
 				go messaging.RemindDaily()
 			}
 
-			if now.UTC().Hour() == 16 { // sg 12am
+			if now.UTC().Hour() == 20 { // sg 4am
 				go messaging.SummarizeDaily()
 			}
 

@@ -68,14 +68,18 @@ func main() {
 		log.Fatalln(firebaseErr)
 	}
 
-	messaging.TeleBot.Handle("/hello", func(c tele.Context) error {
+	messaging.TeleBot.Handle("/start", func(c tele.Context) error {
 		var (
 			username = c.Sender().Username
 		)
-		return c.Send("Hello" + " " + username + "!")
+
+		message := fmt.Sprintf("Hi there %s!\n\nWelcome to Journie, your private and engaging journaling companion. Here, you can chat with a friendly genie who remembers your past entries and helps you explore your thoughts and feelings.\n\nTo get started, you'll need a Gemini AI API key. It's easy to create one for free (basic tier) using Google's secure Gemini API.  Just follow the instructions here: /gemini_key.\n\nOnce you have successfully added your key, simply say \"Hi\" and we can begin!", username)
+
+		return c.Send(message)
 	})
 
-	messaging.TeleBot.Handle("/ingest_session", func(c tele.Context) error {
+	// to remove before live
+	messaging.TeleBot.Handle("/summarize", func(c tele.Context) error {
 		var (
 			userId = int(c.Sender().ID)
 		)
@@ -107,7 +111,7 @@ func main() {
 		return c.Send(string(out))
 	})
 
-	messaging.TeleBot.Handle("/delete_session", func(c tele.Context) error {
+	messaging.TeleBot.Handle("/clear", func(c tele.Context) error {
 		var (
 			userId = int(c.Sender().ID)
 		)
@@ -155,13 +159,12 @@ func main() {
 			return c.Send("Error processing your request")
 		}
 
-		out, err := json.Marshal(resp.Candidates)
+		out, err := generative.ResponseToString(resp)
 		if err != nil {
-			panic(err)
+			return c.Send("Error generating chat response")
 		}
 
-		// Instead, prefer a context short-hand:
-		return c.Send(string(out))
+		return c.Send(out)
 	})
 
 	messaging.TeleBot.Handle(tele.OnPhoto, func(c tele.Context) error {

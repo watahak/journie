@@ -3,6 +3,7 @@ package messaging
 import (
 	"fmt"
 	chatsession "journie/pkg/chat-session"
+	"journie/pkg/templates"
 	"journie/pkg/users"
 	"journie/pkg/utility"
 	"log"
@@ -10,11 +11,30 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/generative-ai-go/genai"
 	tele "gopkg.in/telebot.v3"
 )
 
 var TeleBot *tele.Bot
+
+var (
+	// Universal markup builders.
+	menu     = &tele.ReplyMarkup{ResizeKeyboard: true} // located on keyboard
+	selector = &tele.ReplyMarkup{}                     // located with message bubble
+
+	// Reply buttons.
+	btnHelp     = menu.Text("Help")
+	btnSettings = menu.Text("Settings")
+
+	// Inline buttons.
+	//
+	// Pressing it will cause the client to
+	// send the bot a callback.
+	//
+	// Make sure Unique stays unique as per button kind
+	// since it's required for callback routing to work.
+	//
+	btnWhy = selector.Data("Why do I need this?", "gemini-reason")
+)
 
 type UserModel struct {
 	Platform string `json:"platform"`
@@ -39,6 +59,30 @@ func Init() error {
 	}
 
 	TeleBot = teleBot
+
+	// inline keybpard
+	menu.Reply(
+		menu.Row(btnHelp),
+		menu.Row(btnSettings),
+	)
+	selector.Inline(
+		selector.Row(btnWhy),
+	)
+
+	TeleBot.Handle("/gemini_key", func(c tele.Context) error {
+		return c.Send(templates.GeminiKeyInstructions, &tele.SendOptions{ParseMode: tele.ModeMarkdown, ReplyMarkup: selector})
+	})
+
+	// On reply button pressed (message)
+	TeleBot.Handle(&btnHelp, func(c tele.Context) error {
+		return c.Send("Here is some help: ...!")
+		// return c.Edit("Here is some help: ...")
+	})
+
+	// On inline button pressed (callback)
+	TeleBot.Handle(&btnWhy, func(c tele.Context) error {
+		return c.Send(templates.GeminiKeyReason, &tele.SendOptions{ParseMode: tele.ModeMarkdown})
+	})
 
 	return nil
 }
@@ -68,9 +112,9 @@ func RemindDaily() {
 	targetDate := time.Now().Format("2006-01-02")
 	inactiveUsers := users.GetUsersWithoutSession(targetDate)
 
-	// debounce, telegram rate limits ~30 per second
-	debounceDuration := 100 * time.Millisecond
-	debouncedFn := utility.Debounce(debouncedSendMsg, debounceDuration)
+	// throttle, telegram rate limits ~30 per second
+	throttleDuration := 100 * time.Millisecond
+	throttle := utility.NewThrottle(throttleDuration)
 
 	for _, userId := range inactiveUsers {
 
@@ -92,7 +136,10 @@ func RemindDaily() {
 
 		u := &tele.User{ID: userIntValue}
 
-		go debouncedFn(u, "Hi, take 5 minutes to write a journal entry!")
+		go func() {
+			throttle.Process()
+			TeleBot.Send(u, "Hi, take 5 minutes to write a journal entry!")
+		}()
 	}
 }
 
@@ -111,8 +158,8 @@ func SummarizeDaily() {
 	users := users.GetUsersWithSession(time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, now.Location()))
 
 	// generate content. debounce and rate limit
-	debounceDuration := 1000 * time.Millisecond
-	debouncedFn := utility.Debounce(debouncedIngest, debounceDuration)
+	throttleDuration := 1000 * time.Millisecond
+	throttle := utility.NewThrottle(throttleDuration)
 
 	for _, userId := range users {
 
@@ -122,41 +169,34 @@ func SummarizeDaily() {
 			continue
 		}
 
-		// Calling debouncedFn multiple times within debounceDuration will trigger only once after the duration elapses
-		go debouncedFn(chatSession, userId)
-
+		go func(platformUserId string) {
+			throttle.Process()
+			// Call the original function with converted arguments
+			chatsession.IngestChatSession(chatSession, platformUserId)
+			chatsession.ChatSessionClient.DeleteChatSession(platformUserId)
+		}(userId)
 	}
 }
 
-func debouncedIngest(args ...interface{}) {
-	if len(args) != 2 {
-		log.Println("debouncedIngest argument mismatch")
-		return
-	}
-	chatSession, ok1 := args[0].(*genai.ChatSession)
-	platformUserId, ok2 := args[1].(string)
-	if !ok1 || !ok2 {
-		log.Println("debouncedIngest invalid argument types")
-		return
-	}
-	// Call the original function with converted arguments
-	chatsession.IngestChatSession(chatSession, platformUserId)
+func testLog(userId string) error {
 
-	// dirty delete call
-	chatsession.ChatSessionClient.DeleteChatSession(platformUserId)
+	time.Sleep(100 * time.Millisecond)
+	// Call the original function with converted arguments
+	log.Println("Handling:", userId)
+	return nil
 }
 
-func debouncedSendMsg(args ...interface{}) {
-	if len(args) != 2 {
-		log.Println("debouncedSendMsg argument mismatch")
-		return
+func TestLoop() {
+	targetDate := time.Now().Format("2006-01-02")
+	inactiveUsers := users.GetUsersWithoutSession(targetDate)
+
+	throttleDuration := 5000 * time.Millisecond
+	throttle := utility.NewThrottle(throttleDuration)
+
+	for _, userId := range inactiveUsers {
+		go func(id string) {
+			throttle.Process()
+			testLog(id)
+		}(userId)
 	}
-	to, ok1 := args[0].(tele.Recipient)
-	what, ok2 := args[1].(string)
-	if !ok1 || !ok2 {
-		log.Println("debouncedIngest invalid argument types")
-		return
-	}
-	// Call the original function with converted arguments
-	TeleBot.Send(to, what)
 }

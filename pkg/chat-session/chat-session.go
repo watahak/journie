@@ -159,8 +159,6 @@ func (cs *ChatSession) GetOrCreateChatSession(userID string) (*genai.ChatSession
 			parts[i] = genai.Text(history)
 		}
 
-		fmt.Println(parts)
-
 		chatSession.History = []*genai.Content{
 			{
 				Parts: parts,
