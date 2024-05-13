@@ -4,13 +4,17 @@ import (
 	"context"
 	"fmt"
 	"journie/pkg/messaging"
+	"os"
 
 	"cloud.google.com/go/pubsub"
+	"google.golang.org/api/option"
 )
 
 // SubscribeToTopic subscribes to a Pub/Sub topic and receives messages.
 func SubscribeToTopic(ctx context.Context, projectID, topicName string, subscriptionName string) error {
-	client, err := pubsub.NewClient(ctx, projectID)
+	opt := option.WithCredentialsJSON([]byte(os.Getenv("FIREBASE_CREDENTIALS")))
+
+	client, err := pubsub.NewClient(ctx, projectID, opt)
 	if err != nil {
 		fmt.Println("NewClient failed")
 		return err
