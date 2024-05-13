@@ -70,7 +70,7 @@ func Init() error {
 	)
 
 	TeleBot.Handle("/gemini_key", func(c tele.Context) error {
-		return c.Send(templates.GeminiKeyInstructions, &tele.SendOptions{ParseMode: tele.ModeMarkdown, ReplyMarkup: selector})
+		return c.Send(templates.GeminiKeyInstructions, &tele.SendOptions{ParseMode: tele.ModeMarkdownV2, ReplyMarkup: selector})
 	})
 
 	// On reply button pressed (message)
@@ -81,7 +81,7 @@ func Init() error {
 
 	// On inline button pressed (callback)
 	TeleBot.Handle(&btnWhy, func(c tele.Context) error {
-		return c.Send(templates.GeminiKeyReason, &tele.SendOptions{ParseMode: tele.ModeMarkdown})
+		return c.Send(templates.GeminiKeyReason, &tele.SendOptions{ParseMode: tele.ModeMarkdownV2})
 	})
 
 	return nil

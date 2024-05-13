@@ -1,5 +1,7 @@
 package templates
 
+import "fmt"
+
 const GeminiKeyInstructions = `*Get Your Gemini API Key (Desktop Required for Now)*
 
 *Heads up!* Currently, creating an API key can only be done on a desktop computer using Google AI Studio. Let's get you set up in a few easy steps:
@@ -33,3 +35,18 @@ Think of the API key as a handshake that allows Journie to leverage Google Gemin
 Ready to get started? Let's head to Google AI Studio!
 
 `
+
+func WelcomeMessageSharedApiKey(username string) string {
+
+	const template = `
+Hi there %s\!
+	
+Welcome to Journie, your private and engaging journaling companion\. 
+
+Here, you can chat with a friendly genie who remembers your past entries and helps you explore your thoughts and feelings\.
+	
+Simply say *Hi* and we can begin\!
+	`
+
+	return fmt.Sprintf(template, username)
+}

@@ -9,6 +9,7 @@ import (
 	"journie/pkg/generative"
 	"journie/pkg/messaging"
 	"journie/pkg/pubsub"
+	"journie/pkg/templates"
 	"log"
 
 	"os"
@@ -73,9 +74,9 @@ func main() {
 			username = c.Sender().Username
 		)
 
-		message := fmt.Sprintf("Hi there %s!\n\nWelcome to Journie, your private and engaging journaling companion. Here, you can chat with a friendly genie who remembers your past entries and helps you explore your thoughts and feelings.\n\nTo get started, you'll need a Gemini AI API key. It's easy to create one for free (basic tier) using Google's secure Gemini API.  Just follow the instructions here: /gemini_key.\n\nOnce you have successfully added your key, simply say \"Hi\" and we can begin!", username)
+		message := templates.WelcomeMessageSharedApiKey(username)
 
-		return c.Send(message)
+		return c.Send(message, &tele.SendOptions{ParseMode: tele.ModeMarkdownV2})
 	})
 
 	// to remove before live

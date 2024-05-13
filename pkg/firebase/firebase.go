@@ -15,7 +15,7 @@ var FirestoreClient *firestore.Client
 
 func Init(ctx context.Context) error {
 	conf := &firebase.Config{ProjectID: os.Getenv("FIREBASE_PROJECT_ID")}
-	opt := option.WithCredentialsFile(os.Getenv("FIREBASE_CREDENTIAL_PATH"))
+	opt := option.WithCredentialsJSON([]byte(os.Getenv("FIREBASE_CREDENTIALS")))
 
 	app, err := firebase.NewApp(ctx, conf, opt)
 	if err != nil {
