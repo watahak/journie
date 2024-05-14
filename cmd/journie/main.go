@@ -14,6 +14,7 @@ import (
 
 	"os"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/generative-ai-go/genai"
 	"github.com/joho/godotenv"
 	tele "gopkg.in/telebot.v3"
@@ -22,13 +23,15 @@ import (
 )
 
 func main() {
-	// r := gin.Default()
+	r := gin.Default()
+	r.SetTrustedProxies(nil)
+
 	// r.GET("/ping", func(c *gin.Context) {
 	// 	c.JSON(http.StatusOK, gin.H{
 	// 		"message": "pong",
 	// 	})
 	// })
-	// r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
+
 	ctx := context.Background()
 
 	curDir, err := os.Getwd()
@@ -182,4 +185,5 @@ func main() {
 
 	messaging.TeleBot.Start()
 
+	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 }
