@@ -11,6 +11,7 @@ import (
 	"journie/pkg/pubsub"
 	"journie/pkg/templates"
 	"log"
+	"net/http"
 
 	"os"
 
@@ -23,17 +24,6 @@ import (
 )
 
 func main() {
-	r := gin.Default()
-	r.SetTrustedProxies(nil)
-
-	// r.GET("/ping", func(c *gin.Context) {
-	// 	c.JSON(http.StatusOK, gin.H{
-	// 		"message": "pong",
-	// 	})
-	// })
-
-	ctx := context.Background()
-
 	curDir, err := os.Getwd()
 	if err != nil {
 		log.Println(err)
@@ -42,6 +32,23 @@ func main() {
 	if enverr != nil {
 		log.Fatal("Error loading .env file")
 	}
+
+	r := gin.Default()
+	r.SetTrustedProxies(nil)
+
+	r.GET("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "pong",
+		})
+	})
+
+	go func() {
+		if err := r.Run(":" + os.Getenv("PORT")); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	ctx := context.Background()
 
 	// init google pubsub
 	pubsuberr := pubsub.SubscribeToTopic(context.Background(), os.Getenv("FIREBASE_PROJECT_ID"), "remind-topic", "remind-sub")
@@ -185,5 +192,4 @@ func main() {
 
 	messaging.TeleBot.Start()
 
-	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 }
