@@ -24,13 +24,12 @@ import (
 )
 
 func main() {
-	curDir, err := os.Getwd()
-	if err != nil {
-		log.Println(err)
-	}
-	enverr := godotenv.Load(curDir + "/.env")
-	if enverr != nil {
-		log.Fatal("Error loading .env file")
+
+	if os.Getenv("APP_ENV") != "production" {
+		err := godotenv.Load()
+		if err != nil {
+			log.Fatal("Error loading .env file")
+		}
 	}
 
 	r := gin.Default()
@@ -55,7 +54,7 @@ func main() {
 
 	if pubsuberr != nil {
 		fmt.Println("error with pubsub")
-		log.Fatal(err)
+		log.Fatal(pubsuberr)
 	}
 
 	// init gemini
