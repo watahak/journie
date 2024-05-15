@@ -22,8 +22,8 @@ var (
 	selector = &tele.ReplyMarkup{}                     // located with message bubble
 
 	// Reply buttons.
-	btnHelp     = menu.Text("Help")
-	btnSettings = menu.Text("Settings")
+	btnHelp = menu.Text("Help")
+	// btnSettings = menu.Text("Settings")
 
 	// Inline buttons.
 	//
@@ -61,13 +61,13 @@ func Init() error {
 	TeleBot = teleBot
 
 	// inline keybpard
-	menu.Reply(
-		menu.Row(btnHelp),
-		menu.Row(btnSettings),
-	)
-	selector.Inline(
-		selector.Row(btnWhy),
-	)
+	// menu.Reply(
+	// 	menu.Row(btnHelp),
+	// 	menu.Row(btnSettings),
+	// )
+	// selector.Inline(
+	// 	selector.Row(btnWhy),
+	// )
 
 	TeleBot.Handle("/gemini_key", func(c tele.Context) error {
 		return c.Send(templates.GeminiKeyInstructions, &tele.SendOptions{ParseMode: tele.ModeMarkdownV2, ReplyMarkup: selector})
