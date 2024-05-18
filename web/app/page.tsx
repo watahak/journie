@@ -74,7 +74,7 @@ export default function Home() {
           Start your Journie
         </div>
 
-        <p className="font-normal text-lg">
+        <p className="font-normal text-lg text-center">
           Scan QR code below or tap to open in Telegram
         </p>
 
@@ -93,7 +93,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="mt-8 flex flex-col items-center justify-between mb-32 gap-4">
+      <div className="flex flex-col items-center justify-between mb-32 gap-4">
         <div className="py-4 lg:py-8 text-center font-medium text-3xl lg:text-[48px] animate-text bg-gradient-to-r  from-orange-500 via-purple-500 to-teal-500 bg-clip-text text-transparent">
           Still Curious?
         </div>
