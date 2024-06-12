@@ -81,7 +81,11 @@ func Init() error {
 	// handle manual summarize
 	TeleBot.Handle("/summarize", func(c tele.Context) error {
 		var userId = int(c.Sender().ID)
-		var platformUserId = GetPlatformUserId(fmt.Sprint(userId))
+		platformUserId, err := GetPlatformUserId(fmt.Sprint(userId))
+		if err != nil {
+			log.Printf("Error handling user id %d: %v", userId, err)
+			return c.Send("Error handling user id")
+		}
 
 		cs, err := chatsession.ChatSessionClient.GetOrCreateChatSession(platformUserId)
 		if err != nil {
@@ -107,9 +111,13 @@ func Init() error {
 	// handle manual command to clear session
 	TeleBot.Handle("/clear", func(c tele.Context) error {
 		var userId = int(c.Sender().ID)
-		var platformUserId = GetPlatformUserId(fmt.Sprint(userId))
+		platformUserId, err := GetPlatformUserId(fmt.Sprint(userId))
+		if err != nil {
+			log.Printf("Error handling user id %d: %v", userId, err)
+			return c.Send("Error handling user id")
+		}
 
-		err := chatsession.ChatSessionClient.DeleteChatSession(platformUserId)
+		err = chatsession.ChatSessionClient.DeleteChatSession(platformUserId)
 		if err != nil {
 			log.Printf("Error deleting chat session: %v", err)
 			return c.Send("Error deleting chat session")
@@ -120,13 +128,17 @@ func Init() error {
 
 	// All other text messages to be handled by Journie
 	TeleBot.Handle(tele.OnText, func(c tele.Context) error {
+		ctx := context.Background()
 		var (
 			sender = c.Sender()
 			text   = c.Text()
 		)
 		userId := int(sender.ID)
-		platformUserId := GetPlatformUserId(fmt.Sprint(userId))
-		ctx := context.Background()
+		platformUserId, err := GetPlatformUserId(fmt.Sprint(userId))
+		if err != nil {
+			log.Printf("Error handling user id %d: %v", userId, err)
+			return c.Send("Error handling user id")
+		}
 
 		// Initialize chat session
 		cs, err := chatsession.ChatSessionClient.GetOrCreateChatSession(platformUserId)
@@ -170,8 +182,11 @@ func Init() error {
 	return nil
 }
 
-func GetPlatformUserId(userId string) string {
-	return fmt.Sprintf("%s-%s", Telegram, userId)
+func GetPlatformUserId(userId string) (string, error) {
+	if userId == "" {
+		return "", fmt.Errorf("invalid user ID: expected non empty string")
+	}
+	return fmt.Sprintf("%s-%s", Telegram, userId), nil
 }
 
 func ParsePlatformUserId(platformUserId string) (*UserModel, error) {

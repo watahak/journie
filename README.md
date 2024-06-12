@@ -18,9 +18,17 @@ Create `.env` from `.env.example`.
 - `FIREBASE_CREDENTIALS`: Firebase Credentials in JSON string [Firebase Credentials Instructions](https://firebase.google.com/docs/admin/setup)
 - `FIREBASE_PROJECT_ID`: Firebase Project ID (retrieve from firebase console)
 
-
 ```
 $ go mod tidy
 $ go run ./cmd/journie/main.go
 ```
 
+## Testing
+
+We are using Go's built in unit testing. Refer to docs on [how to add tests](https://go.dev/doc/tutorial/add-a-test)
+
+To run tests in project
+
+```
+$ go test ./pkg/... -v
+```
