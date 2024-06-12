@@ -19,32 +19,24 @@ func Init(ctx context.Context) error {
 
 	app, err := firebase.NewApp(ctx, conf, opt)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalf("Error initializing Firebase app: %v", err)
 		return err
 	}
 
 	FirestoreClient, err = app.Firestore(ctx)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalf("Error initializing Firestore client: %v", err)
 		return err
 	}
+
 	return nil
 }
 
-func UpdateUserLastCreatedSession(ctx context.Context, platformUserId string) error {
+func UpsertUserLastCreatedSession(ctx context.Context, platformUserId string) error {
+	now := time.Now()
+	_, err := FirestoreClient.Collection("users").Doc(platformUserId).Set(ctx, map[string]interface{}{
+		"lastCreatedSession": now,
+	}, firestore.MergeAll)
 
-	var now = time.Now()
-
-	_, err := FirestoreClient.Collection("users").Doc(platformUserId).Update(ctx, []firestore.Update{
-		{
-			Path:  "lastCreatedSession",
-			Value: now,
-		},
-	})
-
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }

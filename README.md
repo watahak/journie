@@ -21,6 +21,6 @@ Create `.env` from `.env.example`.
 
 ```
 $ go mod tidy
-$ go run go run ./cmd/journie/main.go
+$ go run ./cmd/journie/main.go
 ```
 
